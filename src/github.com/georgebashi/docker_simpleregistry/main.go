@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"strings"
 	"encoding/json"
 	"crypto/sha256"
+	"path/filepath"
 )
 
 func PingHandler (w http.ResponseWriter, r *http.Request) {
@@ -114,10 +116,15 @@ func (ctx *Context) computeImageChecksum(algo string, imageId string, jsonData [
 }
 
 func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) {
-	//imageId := mux.Vars(r)["imageId"]
-	decoder := json.NewDecoder(r.Body)
+	imageId := mux.Vars(r)["imageId"]
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		sendError(500, "Couldn't read request body", w)
+		return
+	}
+
 	var data map[string]string
-	if err := decoder.Decode(&data); err != nil {
+	if err := json.Unmarshal(body, &data); err != nil {
 		sendError(400, "Invalid JSON", w)
 		return
 	}
@@ -127,8 +134,8 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	checksum, ok := r.Header.Get("X-Docker-Checksum")
-	if !ok {
+	checksum := r.Header.Get("X-Docker-Checksum")
+	if checksum == "" {
 		sendError(400, "Missing Image's checksum", w)
 		return
 	}
@@ -144,10 +151,166 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	checksumPath := storage.ImageChecksumPath(imageId)
+	ctx.storage.PutContent(checksumPath, []byte(checksum))
 
+	if imageId != data["id"] {
+		sendError(400, "JSON data contains invalid id", w)
+		return
+	}
 
+	parentId, ok := data["parent"]
+	exists, err := ctx.storage.Exists(storage.ImageJsonPath(parentId))
+	if ok && !exists && err == nil {
+		sendError(400, "Image depends on a non existing parent", w)
+		return
+	}
 
+	jsonPath := storage.ImageJsonPath(imageId)
+	markPath := storage.ImageMarkPath(imageId)
 
+	jsonExists, err := ctx.storage.Exists(jsonPath)
+	if err != nil {
+		sendError(500, "Couldn't check if JSON exists", w)
+		return
+	}
+
+	markExists, err := ctx.storage.Exists(markPath)
+	if err != nil {
+		sendError(500, "Couldn't check if mark exists", w)
+		return
+	}
+
+	if jsonExists && !markExists {
+		sendError(409, "Image already exists", w)
+	}
+
+	ctx.storage.PutContent(markPath, []byte("true"))
+	ctx.storage.PutContent(jsonPath, body)
+
+	ctx.generateAncestry(imageId, parentId)
+
+	sendResponse(w, nil, 200, nil, false)
+}
+
+func (ctx *Context) generateAncestry(imageId string, parentId string) error {
+	data, err := ctx.storage.GetContent(storage.ImageAncestryPath(parentId))
+	if err != nil {
+		return err
+	}
+
+	var ancestry []string
+	if err := json.Unmarshal(data, &ancestry); err != nil {
+		return err
+	}
+
+	newAncestry := []string{imageId}
+	newAncestry = append(newAncestry, ancestry...)
+
+	data, err = json.Marshal(newAncestry)
+	if err != nil {
+		return err
+	}
+
+	ctx.storage.PutContent(storage.ImageAncestryPath(imageId), data)
+
+	return nil
+}
+
+func (ctx *Context) GetTagsHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+
+	data := make(map[string]string)
+
+	dir, err := ctx.storage.ListDirectory(storage.TagPath(namespace, repository))
+	if err != nil {
+		sendError(404, "Repository not found", w)
+		return
+	}
+
+	for _, fname := range dir {
+		tagName := filepath.Base(fname)
+		if !strings.HasPrefix(tagName, "tag_") {
+			continue
+		}
+
+		content, err := ctx.storage.GetContent(fname)
+		if err != nil {
+			continue
+		}
+		data[tagName[4:]] = string(content)
+	}
+
+	sendResponse(w, data, 200, nil, false)
+}
+
+func (ctx *Context) GetTagHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+	tag := mux.Vars(r)["tag"]
+
+	data, err := ctx.storage.GetContent(storage.TagPathWithName(namespace, repository, tag))
+	if err != nil {
+		sendError(404, "Tag not found", w)
+	}
+
+	sendResponse(w, data, 200, nil, false)
+}
+
+func (ctx *Context) PutTagHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+	tag := mux.Vars(r)["tag"]
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		sendError(500, "Couldn't read request body", w)
+		return
+	}
+
+	var data string
+	if err := json.Unmarshal(body, &data); err != nil {
+		sendError(400, "Invalid data", w)
+		return
+	}
+
+	exists, err := ctx.storage.Exists(storage.ImageJsonPath(data))
+	if !exists || err != nil {
+		sendError(404, "Image not found", w)
+		return
+	}
+
+	ctx.storage.PutContent(storage.TagPathWithName(namespace, repository, tag), []byte(data))
+
+	sendResponse(w, data, 200, nil, false)
+}
+
+func (ctx *Context) DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+	tag := mux.Vars(r)["tag"]
+
+	err := ctx.storage.Remove(storage.TagPathWithName(namespace, repository, tag))
+	if err != nil {
+		sendError(404, "Tag not found", w)
+		return
+	}
+
+	sendResponse(w, true, 200, nil, false)
+}
+
+func (ctx *Context) DeleteRepoHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+
+	err := ctx.storage.Remove(storage.TagPath(namespace, repository))
+	if err != nil {
+		sendError(404, "Repository not found", w)
+		return
+	}
+
+	sendResponse(w, true, 200, nil, false)
 }
 
 func sendError(status int, msg string, w http.ResponseWriter) {
@@ -190,9 +353,11 @@ func main() {
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.PutImageJsonHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/ancestry", ctx.GetImageAncestryHandler).Methods("GET")
 
-	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", GetTagsHandler).Methods("GET")
-	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", PutTagsHandler).Methods("PUT")
-	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", DeleteTagsHandler).Methods("DELETE")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetTagsHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.GetTagHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.PutTagHandler).Methods("PUT")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.DeleteTagHandler).Methods("DELETE")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.DeleteRepoHandler).Methods("DELETE")
 
 
 	// index stuff
