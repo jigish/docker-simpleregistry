@@ -352,7 +352,7 @@ func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sendResponse(w, data, 200, nil, false)
+	sendResponse(w, data, 200, nil, true)
 }
 
 func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
