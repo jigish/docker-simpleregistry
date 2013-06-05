@@ -387,31 +387,37 @@ func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func sendError(status int, msg string, w http.ResponseWriter) {
-	w.WriteHeader(status)
-	fmt.Fprintf(w, msg)
+	sendResponse(w, msg, status, nil, false)
 }
 
 func sendResponse(w http.ResponseWriter, data interface{}, status int, headers map[string]string, raw bool) {
 	if data == nil {
 		data = true
 	}
+
+	var output []byte
+	if raw == false {
+		var err error
+		output, err = json.Marshal(data)
+		if err != nil {
+			sendError(500, fmt.Sprintf("Couldn't marshal data to JSON: %s", err), w)
+			return
+		}
+	} else {
+		output = []byte(fmt.Sprintf("%s", data))
+	}
+
+	w.WriteHeader(status)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "-1")
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	for k, v := range headers {
 		w.Header().Set(k, v)
 	}
-	
-	if raw == false {
-		json, err := json.Marshal(data)
-		if err != nil {
-			fmt.Fprint(w, data)
-		} else {
-			w.Write(json)
-		}
-	}
+
+	w.Write(output)
 }
 
 func main() {
