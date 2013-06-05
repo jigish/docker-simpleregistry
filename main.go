@@ -29,7 +29,7 @@ func (ctx *Context) GetImageLayerHandler(w http.ResponseWriter, r *http.Request)
 	imageId := mux.Vars(r)["imageId"]
 	imageReader, err := ctx.storage.StreamRead(storage.ImageLayerPath(imageId))
 	if err != nil {
-		sendError(404, "image not found", w)
+		sendResponse(w, "image not found", 404, nil, false)
 		return
 	}
 	defer imageReader.Close()
@@ -41,13 +41,13 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 	imageId := mux.Vars(r)["imageId"]
 	jsonData, err := ctx.storage.GetContent(storage.ImageJsonPath(imageId))
 	if err != nil {
-		sendError(404, "Image's JSON not found", w)
+		sendResponse(w, "Image's JSON not found", 404, nil, false)
 		return
 	}
 
 	checksum, err := ctx.storage.GetContent(storage.ImageChecksumPath(imageId))
 	if err != nil {
-		sendError(404, "Image's checksum not found", w)
+		sendResponse(w, "Image's checksum not found", 404, nil, false)
 		return
 	}
 
@@ -56,14 +56,14 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 
 	if layerExists, err := ctx.storage.Exists(layerPath); layerExists == true && err == nil {
 		if markExists, err := ctx.storage.Exists(markPath); markExists == false || err != nil {
-			sendError(409, "Image already exists", w)
+			sendResponse(w, "Image already exists", 409, nil, false)
 			return
 		}
 	}
 
 	writer, err := ctx.storage.StreamWrite(layerPath)
 	if err != nil {
-		sendError(500, "Couldn't write to layer file", w)
+		sendResponse(w, "Couldn't write to layer file", 500, nil, false)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 	checksumParts := strings.Split(string(checksum), ":")
 	computedChecksum, err := ctx.computeImageChecksum(checksumParts[0], imageId, jsonData)
 	if err != nil || computedChecksum != strings.ToLower(checksumParts[1]) {
-		sendError(400, "Checksum mismatch, ignoring the layer", w)
+		sendResponse(w, "Checksum mismatch, ignoring the layer", 400, nil, false)
 		return
 	}
 
@@ -85,7 +85,7 @@ func (ctx *Context) GetImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 	imageId := mux.Vars(r)["imageId"]
 	data, err := ctx.storage.GetContent(storage.ImageJsonPath(imageId))
 	if err != nil {
-		sendError(404, "Image not found", w)
+		sendResponse(w, "Image not found", 404, nil, false)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (ctx *Context) GetImageAncestryHandler(w http.ResponseWriter, r *http.Reque
 
 	data, err := ctx.storage.GetContent(storage.ImageAncestryPath(imageId))
 	if err != nil {
-		sendError(404, "Image not found", w)
+		sendResponse(w, "Image not found", 404, nil, false)
 	}
 
 	sendResponse(w, data, http.StatusOK, nil, true)
@@ -127,35 +127,35 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 	imageId := mux.Vars(r)["imageId"]
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		sendError(500, "Couldn't read request body", w)
+		sendResponse(w, "Couldn't read request body", 500, nil, false)
 		return
 	}
 
 	var data map[string]string
 	if err := json.Unmarshal(body, &data); err != nil {
-		sendError(400, "Invalid JSON", w)
+		sendResponse(w, "Invalid JSON", 400, nil, false)
 		return
 	}
 
 	if _, ok := data["id"]; !ok {
-		sendError(400, "Missing Key `id' in JSON", w)
+		sendResponse(w, "Missing Key `id' in JSON", 400, nil, false)
 		return
 	}
 
 	checksum := r.Header.Get("X-Docker-Checksum")
 	if checksum == "" {
-		sendError(400, "Missing Image's checksum", w)
+		sendResponse(w, "Missing Image's checksum", 400, nil, false)
 		return
 	}
 
 	checksumParts := strings.Split(string(checksum), ":")
 	if len(checksumParts) != 2 {
-		sendError(400, "Invalid checksum format", w)
+		sendResponse(w, "Invalid checksum format", 400, nil, false)
 		return
 	}
 
 	if checksumParts[0] != "sha256" {
-		sendError(400, "Checksum algorithm not supported", w)
+		sendResponse(w, "Checksum algorithm not supported", 400, nil, false)
 		return
 	}
 
@@ -163,14 +163,14 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 	ctx.storage.PutContent(checksumPath, []byte(checksum))
 
 	if imageId != data["id"] {
-		sendError(400, "JSON data contains invalid id", w)
+		sendResponse(w, "JSON data contains invalid id", 400, nil, false)
 		return
 	}
 
 	parentId, ok := data["parent"]
 	exists, err := ctx.storage.Exists(storage.ImageJsonPath(parentId))
 	if ok && !exists && err == nil {
-		sendError(400, "Image depends on a non existing parent", w)
+		sendResponse(w, "Image depends on a non existing parent", 400, nil, false)
 		return
 	}
 
@@ -179,25 +179,25 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 
 	jsonExists, err := ctx.storage.Exists(jsonPath)
 	if err != nil {
-		sendError(500, "Couldn't check if JSON exists", w)
+		sendResponse(w, "Couldn't check if JSON exists", 500, nil, false)
 		return
 	}
 
 	markExists, err := ctx.storage.Exists(markPath)
 	if err != nil {
-		sendError(500, "Couldn't check if mark exists", w)
+		sendResponse(w, "Couldn't check if mark exists", 500, nil, false)
 		return
 	}
 
 	if jsonExists && !markExists {
-		sendError(409, "Image already exists", w)
+		sendResponse(w, "Image already exists", 409, nil, false)
 	}
 
 	ctx.storage.PutContent(markPath, []byte("true"))
 	ctx.storage.PutContent(jsonPath, body)
 
 	if err := ctx.generateAncestry(imageId, parentId); err != nil {
-		sendError(500, fmt.Sprintf("Couldn't generate ancestry: %s", err), w)
+		sendResponse(w, fmt.Sprintf("Couldn't generate ancestry: %s", err), 500, nil, false)
 		return
 	}
 
@@ -247,7 +247,7 @@ func (ctx *Context) GetTagsHandler(w http.ResponseWriter, r *http.Request) {
 
 	dir, err := ctx.storage.ListDirectory(storage.TagPath(namespace, repository))
 	if err != nil {
-		sendError(404, "Repository not found", w)
+		sendResponse(w, "Repository not found", 404, nil, false)
 		return
 	}
 
@@ -274,7 +274,7 @@ func (ctx *Context) GetTagHandler(w http.ResponseWriter, r *http.Request) {
 
 	data, err := ctx.storage.GetContent(storage.TagPathWithName(namespace, repository, tag))
 	if err != nil {
-		sendError(404, "Tag not found", w)
+		sendResponse(w, "Tag not found", 404, nil, false)
 	}
 
 	sendResponse(w, data, 200, nil, false)
@@ -287,19 +287,19 @@ func (ctx *Context) PutTagHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		sendError(500, "Couldn't read request body", w)
+		sendResponse(w, "Couldn't read request body", 500, nil, false)
 		return
 	}
 
 	var data string
 	if err := json.Unmarshal(body, &data); err != nil {
-		sendError(400, "Invalid data", w)
+		sendResponse(w, "Invalid data", 400, nil, false)
 		return
 	}
 
 	exists, err := ctx.storage.Exists(storage.ImageJsonPath(data))
 	if !exists || err != nil {
-		sendError(404, "Image not found", w)
+		sendResponse(w, "Image not found", 404, nil, false)
 		return
 	}
 
@@ -315,7 +315,7 @@ func (ctx *Context) DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := ctx.storage.Remove(storage.TagPathWithName(namespace, repository, tag))
 	if err != nil {
-		sendError(404, "Tag not found", w)
+		sendResponse(w, "Tag not found", 404, nil, false)
 		return
 	}
 
@@ -328,7 +328,7 @@ func (ctx *Context) DeleteRepoHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := ctx.storage.Remove(storage.TagPath(namespace, repository))
 	if err != nil {
-		sendError(404, "Repository not found", w)
+		sendResponse(w, "Repository not found", 404, nil, false)
 		return
 	}
 
@@ -345,7 +345,7 @@ func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	data, err := ctx.storage.GetContent(storage.ImageListPath(namespace, repository))
 	if err != nil {
-		sendError(404, "Repository not found", w)
+		sendResponse(w, "Repository not found", 404, nil, false)
 	}
 
 	sendResponse(w, data, 200, nil, false)
@@ -357,13 +357,13 @@ func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		sendError(500, "Couldn't read request body", w)
+		sendResponse(w, "Couldn't read request body", 500, nil, false)
 		return
 	}
 
 	var data []map[string]string
 	if err := json.Unmarshal(body, &data); err != nil {
-		sendError(400, "Invalid data", w)
+		sendResponse(w, "Invalid data", 400, nil, false)
 		return
 	}
 
@@ -385,10 +385,6 @@ func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, false)
 }
 
-func sendError(status int, msg string, w http.ResponseWriter) {
-	sendResponse(w, msg, status, nil, false)
-}
-
 func sendResponse(w http.ResponseWriter, data interface{}, status int, headers map[string]string, raw bool) {
 	if data == nil {
 		data = true
@@ -399,7 +395,7 @@ func sendResponse(w http.ResponseWriter, data interface{}, status int, headers m
 		var err error
 		output, err = json.Marshal(data)
 		if err != nil {
-			sendError(500, fmt.Sprintf("Couldn't marshal data to JSON: %s", err), w)
+			sendResponse(w, fmt.Sprintf("Couldn't marshal data to JSON: %s", err), 500, nil, false)
 			return
 		}
 	} else {
