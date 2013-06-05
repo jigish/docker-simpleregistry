@@ -371,22 +371,9 @@ func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageListPath := storage.ImageListPath(namespace, repository)
-	imageList, err := ctx.storage.GetContent(imageListPath)
-	if err != nil {
-		imageList = []byte("[]")
-	}
-	var images []map[string]string
-	err = json.Unmarshal(imageList, &images)
-	if err != nil {
-		images = []map[string]string{}
-	}
-	updated := append(images, data...)
+	ctx.storage.PutContent(storage.ImageListPath(namespace, repository), body)
 
-	json, err := json.Marshal(updated)
-	ctx.storage.PutContent(imageListPath, []byte(json))
-
-	sendResponse(w, data, 200, nil, false)
+	sendResponse(w, nil, 200, nil, false)
 }
 
 func sendResponse(w http.ResponseWriter, data interface{}, status int, headers map[string]string, raw bool) {
