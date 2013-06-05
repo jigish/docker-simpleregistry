@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"github.com/georgebashi/docker_simpleregistry/storage"
+	"github.com/georgebashi/docker-simpleregistry/storage"
 	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
