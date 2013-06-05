@@ -59,8 +59,8 @@ func (s *Storage) GetContent(path string) ([]byte, error) {
 
 func (s *Storage) PutContent(path string, content []byte) error {
 	absPath := p.Join(s.RootPath, path)
-	os.MkdirAll(filepath.Dir(absPath), 0)
-	return ioutil.WriteFile(absPath, content, 0)
+	os.MkdirAll(filepath.Dir(absPath), 0770)
+	return ioutil.WriteFile(absPath, content, 0660)
 }
 
 func (s *Storage) StreamRead(path string) (io.ReadCloser, error) {
