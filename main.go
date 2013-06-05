@@ -277,6 +277,7 @@ func (ctx *Context) GetTagHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := ctx.storage.GetContent(storage.TagPathWithName(namespace, repository, tag))
 	if err != nil {
 		sendResponse(w, "Tag not found", 404, nil, false)
+		return
 	}
 
 	sendResponse(w, data, 200, nil, false)
@@ -348,6 +349,7 @@ func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
 	data, err := ctx.storage.GetContent(storage.ImageListPath(namespace, repository))
 	if err != nil {
 		sendResponse(w, "Repository not found", 404, nil, false)
+		return
 	}
 
 	sendResponse(w, data, 200, nil, false)
