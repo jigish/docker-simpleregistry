@@ -25,4 +25,7 @@ test_expect_success "put_image_layer: bad data" "
 test_expect_success "put_image_layer: correct data" "
   $C -X PUT $H/v1/images/foo/layer -d 'lolol' -H 'Content-Type: application/octet-stream'"
 
+test_expect_success "get_image_ancestry" "
+  $C $H/v1/images/foo/ancestry | tr '\n' ' ' | grep -E '[\s*\"foo\"\s*]'"
+
 test_done
