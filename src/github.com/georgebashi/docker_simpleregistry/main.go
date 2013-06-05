@@ -14,11 +14,11 @@ import (
 )
 
 func PingHandler (w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "true") // lolwut
+	sendResponse(w, nil, 200, nil, false)
 }
 
 func HomeHandler (w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "docker-registry server (docker_simpleregistry)") // lolwut
+	sendResponse(w, "docker-simpleregistry server", 200, nil, false)
 }
 
 type Context struct {
