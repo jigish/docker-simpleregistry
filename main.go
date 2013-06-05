@@ -103,6 +103,7 @@ func (ctx *Context) GetImageAncestryHandler(w http.ResponseWriter, r *http.Reque
 	data, err := ctx.storage.GetContent(storage.ImageAncestryPath(imageId))
 	if err != nil {
 		sendResponse(w, "Image not found", 404, nil, false)
+		return
 	}
 
 	sendResponse(w, data, http.StatusOK, nil, true)
@@ -191,6 +192,7 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 
 	if jsonExists && !markExists {
 		sendResponse(w, "Image already exists", 409, nil, false)
+		return
 	}
 
 	ctx.storage.PutContent(markPath, []byte("true"))
