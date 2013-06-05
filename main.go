@@ -196,12 +196,26 @@ func (ctx *Context) PutImageJsonHandler(w http.ResponseWriter, r *http.Request) 
 	ctx.storage.PutContent(markPath, []byte("true"))
 	ctx.storage.PutContent(jsonPath, body)
 
-	ctx.generateAncestry(imageId, parentId)
+	if err := ctx.generateAncestry(imageId, parentId); err != nil {
+		sendError(500, fmt.Sprintf("Couldn't generate ancestry: %s", err), w)
+		return
+	}
 
 	sendResponse(w, nil, 200, nil, false)
 }
 
 func (ctx *Context) generateAncestry(imageId string, parentId string) error {
+	if parentId == "" {
+		selfAncestryJson, err := json.Marshal([]string{imageId})
+		if err != nil {
+			return err
+		}
+		if err := ctx.storage.PutContent(storage.ImageAncestryPath(imageId), selfAncestryJson); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	data, err := ctx.storage.GetContent(storage.ImageAncestryPath(parentId))
 	if err != nil {
 		return err
