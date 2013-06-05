@@ -1,12 +1,12 @@
 package storage
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
-	"fmt"
+	"os"
 	p "path"
 	"path/filepath"
-	"os"
 )
 
 const REPOSITORIES = "repositories"
@@ -71,10 +71,11 @@ func (s *Storage) StreamWrite(path string) (io.WriteCloser, error) {
 	return os.Create(p.Join(s.RootPath, path))
 }
 
-
 func (s *Storage) ListDirectory(path string) ([]string, error) {
 	files, err := ioutil.ReadDir(p.Join(s.RootPath, path))
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	names := make([]string, len(files))
 	for i, f := range files {
@@ -85,13 +86,15 @@ func (s *Storage) ListDirectory(path string) ([]string, error) {
 
 func (s *Storage) Exists(path string) (bool, error) {
 	_, err := os.Stat(p.Join(s.RootPath, path))
-	if err == nil { return true, nil }
-	if os.IsNotExist(err) { return false, nil }
+	if err == nil {
+		return true, nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
 	return false, err
 }
-
 
 func (s *Storage) Remove(path string) error {
 	return os.RemoveAll(p.Join(s.RootPath, path))
 }
-

@@ -1,23 +1,23 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
-	"github.com/georgebashi/docker_simpleregistry/storage"
-	"net/http"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"github.com/georgebashi/docker_simpleregistry/storage"
+	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
-	"strings"
-	"encoding/json"
-	"crypto/sha256"
+	"net/http"
 	"path/filepath"
+	"strings"
 )
 
-func PingHandler (w http.ResponseWriter, r *http.Request) {
+func PingHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, nil, 200, nil, false)
 }
 
-func HomeHandler (w http.ResponseWriter, r *http.Request) {
+func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, "docker-simpleregistry server", 200, nil, false)
 }
 
@@ -25,7 +25,7 @@ type Context struct {
 	storage *storage.Storage
 }
 
-func (ctx *Context) GetImageLayerHandler (w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) GetImageLayerHandler(w http.ResponseWriter, r *http.Request) {
 	imageId := mux.Vars(r)["imageId"]
 	imageReader, err := ctx.storage.StreamRead(storage.ImageLayerPath(imageId))
 	if err != nil {
@@ -37,7 +37,7 @@ func (ctx *Context) GetImageLayerHandler (w http.ResponseWriter, r *http.Request
 	io.Copy(w, imageReader)
 }
 
-func (ctx *Context) PutImageLayerHandler (w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request) {
 	imageId := mux.Vars(r)["imageId"]
 	jsonData, err := ctx.storage.GetContent(storage.ImageJsonPath(imageId))
 	if err != nil {
@@ -81,7 +81,7 @@ func (ctx *Context) PutImageLayerHandler (w http.ResponseWriter, r *http.Request
 	sendResponse(w, nil, http.StatusOK, nil, false)
 }
 
-func (ctx *Context) GetImageJsonHandler (w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) GetImageJsonHandler(w http.ResponseWriter, r *http.Request) {
 	imageId := mux.Vars(r)["imageId"]
 	data, err := ctx.storage.GetContent(storage.ImageJsonPath(imageId))
 	if err != nil {
@@ -385,7 +385,6 @@ func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, false)
 }
 
-
 func sendError(status int, msg string, w http.ResponseWriter) {
 	sendResponse(w, msg, status, nil, false)
 }
@@ -425,7 +424,7 @@ func main() {
 	r.HandleFunc("/_ping", PingHandler)
 	r.HandleFunc("/", HomeHandler)
 
-	ctx := &Context{ storage: &storage.Storage{ RootPath: "." } }
+	ctx := &Context{storage: &storage.Storage{RootPath: "."}}
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.GetImageLayerHandler).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.PutImageLayerHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.GetImageJsonHandler).Methods("GET")
@@ -438,12 +437,10 @@ func main() {
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.DeleteTagHandler).Methods("DELETE")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.DeleteRepoHandler).Methods("DELETE")
 
-
 	// index stuff
 	r.HandleFunc("/v1/users", LoginHandler)
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.ListImagesHandler).Methods("GET")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.PutImageHandler).Methods("PUT")
-
 
 	http.ListenAndServe(":8080", r)
 }
