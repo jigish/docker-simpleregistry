@@ -313,6 +313,57 @@ func (ctx *Context) DeleteRepoHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, true, 200, nil, false)
 }
 
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	sendResponse(w, true, 200, nil, false)
+}
+
+func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+
+	data, err := ctx.storage.GetContent(storage.ImageListPath(namespace, repository))
+	if err != nil {
+		sendError(404, "Repository not found", w)
+	}
+
+	sendResponse(w, data, 200, nil, false)
+}
+
+func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
+	namespace := mux.Vars(r)["namespace"]
+	repository := mux.Vars(r)["repository"]
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		sendError(500, "Couldn't read request body", w)
+		return
+	}
+
+	var data []map[string]string
+	if err := json.Unmarshal(body, &data); err != nil {
+		sendError(400, "Invalid data", w)
+		return
+	}
+
+	imageListPath := storage.ImageListPath(namespace, repository)
+	imageList, err := ctx.storage.GetContent(imageListPath)
+	if err != nil {
+		imageList = []byte("[]")
+	}
+	var images []map[string]string
+	err = json.Unmarshal(imageList, &images)
+	if err != nil {
+		images = []map[string]string{}
+	}
+	updated := append(images, data...)
+
+	json, err := json.Marshal(updated)
+	ctx.storage.PutContent(imageListPath, []byte(json))
+
+	sendResponse(w, data, 200, nil, false)
+}
+
+
 func sendError(status int, msg string, w http.ResponseWriter) {
 	w.WriteHeader(status)
 	fmt.Fprintf(w, msg)
@@ -361,9 +412,9 @@ func main() {
 
 
 	// index stuff
-	//r.HandleFunc("/v1/users", LoginHandler)
-	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ListImagesHandler).Methods("GET")
-	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", PutImageHandler).Methods("PUT")
+	r.HandleFunc("/v1/users", LoginHandler)
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.ListImagesHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.PutImageHandler).Methods("PUT")
 
 
 	http.ListenAndServe(":8080", r)

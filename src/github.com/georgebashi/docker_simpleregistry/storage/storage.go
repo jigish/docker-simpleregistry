@@ -45,6 +45,10 @@ func TagPathWithName(namespace string, repository string, tagname string) string
 	return fmt.Sprintf("%s/%s/%s/tag_%s", REPOSITORIES, namespace, repository, tagname)
 }
 
+func ImageListPath(namespace string, repository string) string {
+	return fmt.Sprintf("%s/%s/%s/images", REPOSITORIES, namespace, repository)
+}
+
 type Storage struct {
 	RootPath string
 }
