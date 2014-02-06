@@ -1,12 +1,11 @@
 package storage
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
-	p "path"
-	"path/filepath"
 )
 
 const REPOSITORIES = "repositories"
@@ -49,52 +48,48 @@ func ImageListPath(namespace string, repository string) string {
 	return fmt.Sprintf("%s/%s/%s/images", REPOSITORIES, namespace, repository)
 }
 
-type Storage struct {
-	RootPath string
+type Storage interface {
+	GetContent(string) ([]byte, error)
+	PutContent(string, []byte) error
+	StreamRead(string) (io.ReadCloser, error)
+	StreamWrite(string) (io.WriteCloser, error)
+	ListDirectory(string) ([]string, error)
+	Exists(string) (bool, error)
+	Remove(string) error
 }
 
-func (s *Storage) GetContent(path string) ([]byte, error) {
-	return ioutil.ReadFile(p.Join(s.RootPath, path))
+type Config struct {
+	Type  string `json:"type"`
+	Local *Local `json:"local"`
+	S3    *S3    `json:"s3"`
 }
 
-func (s *Storage) PutContent(path string, content []byte) error {
-	absPath := p.Join(s.RootPath, path)
-	os.MkdirAll(filepath.Dir(absPath), 0770)
-	return ioutil.WriteFile(absPath, content, 0660)
-}
+var Default = &Local{"."}
 
-func (s *Storage) StreamRead(path string) (io.ReadCloser, error) {
-	return os.Open(p.Join(s.RootPath, path))
-}
-
-func (s *Storage) StreamWrite(path string) (io.WriteCloser, error) {
-	return os.Create(p.Join(s.RootPath, path))
-}
-
-func (s *Storage) ListDirectory(path string) ([]string, error) {
-	files, err := ioutil.ReadDir(p.Join(s.RootPath, path))
+func New(cfgFile string) (Storage, error) {
+	// load config from file
+	file, err := os.Open(cfgFile)
 	if err != nil {
 		return nil, err
 	}
-
-	names := make([]string, len(files))
-	for i, f := range files {
-		names[i] = p.Join(s.RootPath, path, f.Name())
+	dec := json.NewDecoder(file)
+	var cfg Config
+	if err := dec.Decode(&cfg); err != nil {
+		return nil, err
 	}
-	return names, nil
-}
 
-func (s *Storage) Exists(path string) (bool, error) {
-	_, err := os.Stat(p.Join(s.RootPath, path))
-	if err == nil {
-		return true, nil
+	switch cfg.Type {
+	case "local":
+		if cfg.Local != nil {
+			return cfg.Local, nil
+		}
+		return nil, errors.New("No config for storage type 'local' found")
+	case "s3":
+		if cfg.S3 != nil {
+			return cfg.S3, nil
+		}
+		return nil, errors.New("No config for storage type 's3' found")
+	default:
+		return nil, errors.New("Invalid storage type: "+cfg.Type)
 	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, err
-}
-
-func (s *Storage) Remove(path string) error {
-	return os.RemoveAll(p.Join(s.RootPath, path))
 }

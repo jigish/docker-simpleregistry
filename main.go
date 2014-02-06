@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -23,7 +24,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type Context struct {
-	storage *storage.Storage
+	storage storage.Storage
 }
 
 func (ctx *Context) GetImageLayerHandler(w http.ResponseWriter, r *http.Request) {
@@ -407,15 +408,33 @@ func sendResponse(w http.ResponseWriter, data interface{}, status int, headers m
 	w.Write(output)
 }
 
+func loadContext(cfgFile string) (ctx *Context, err error) {
+	if cfgFile == "" {
+		// no config file, use defaults
+		return &Context{storage: storage.Default}, nil
+	}
+
+	// populate context
+	ctx = &Context{}
+	ctx.storage, err = storage.New(cfgFile)
+	return ctx, err
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "The address to listen on")
+	config := flag.String("config", "", "The config file to use")
 	flag.Parse()
+
+	ctx, err := loadContext(*config)
+	if err != nil {
+		fmt.Println("ERROR: "+err.Error())
+		os.Exit(1)
+	}
 
 	r := mux.NewRouter()
 	r.HandleFunc("/_ping", PingHandler)
 	r.HandleFunc("/", HomeHandler)
 
-	ctx := &Context{storage: &storage.Storage{RootPath: "."}}
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.GetImageLayerHandler).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.PutImageLayerHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.GetImageJsonHandler).Methods("GET")
