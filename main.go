@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/georgebashi/docker-simpleregistry/storage"
 	"github.com/gorilla/mux"
@@ -407,6 +408,9 @@ func sendResponse(w http.ResponseWriter, data interface{}, status int, headers m
 }
 
 func main() {
+	addr := flag.String("addr", ":8080", "The address to listen on")
+	flag.Parse()
+
 	r := mux.NewRouter()
 	r.HandleFunc("/_ping", PingHandler)
 	r.HandleFunc("/", HomeHandler)
@@ -429,5 +433,5 @@ func main() {
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.ListImagesHandler).Methods("GET")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.PutImageHandler).Methods("PUT")
 
-	http.ListenAndServe(":8080", r)
+	http.ListenAndServe(*addr, r)
 }
