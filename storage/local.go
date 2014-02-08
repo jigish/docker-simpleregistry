@@ -26,8 +26,14 @@ func (s *Local) StreamRead(path string) (io.ReadCloser, error) {
 	return os.Open(p.Join(s.RootPath, path))
 }
 
-func (s *Local) StreamWrite(path string) (io.WriteCloser, error) {
-	return os.Create(p.Join(s.RootPath, path))
+func (s *Local) StreamWrite(path string, reader io.Reader, length int64) error {
+	file, err := os.Create(p.Join(s.RootPath, path))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	_, err = io.Copy(file, reader)
+	return err
 }
 
 func (s *Local) ListDirectory(path string) ([]string, error) {

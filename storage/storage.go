@@ -52,7 +52,7 @@ type Storage interface {
 	GetContent(string) ([]byte, error)
 	PutContent(string, []byte) error
 	StreamRead(string) (io.ReadCloser, error)
-	StreamWrite(string) (io.WriteCloser, error)
+	StreamWrite(string, io.Reader, int64) error
 	ListDirectory(string) ([]string, error)
 	Exists(string) (bool, error)
 	Remove(string) error
@@ -86,7 +86,7 @@ func New(cfgFile string) (Storage, error) {
 		return nil, errors.New("No config for storage type 'local' found")
 	case "s3":
 		if cfg.S3 != nil {
-			return cfg.S3, nil
+			return cfg.S3, cfg.S3.init()
 		}
 		return nil, errors.New("No config for storage type 's3' found")
 	default:

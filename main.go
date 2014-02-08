@@ -63,13 +63,11 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	writer, err := ctx.storage.StreamWrite(layerPath)
+	err = ctx.storage.StreamWrite(layerPath, r.Body, r.ContentLength)
 	if err != nil {
 		sendResponse(w, "Couldn't write to layer file", 500, nil, false)
 		return
 	}
-
-	io.Copy(writer, r.Body)
 
 	checksumParts := strings.Split(string(checksum), ":")
 	computedChecksum, err := ctx.computeImageChecksum(checksumParts[0], imageId, jsonData)
