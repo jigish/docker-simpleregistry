@@ -56,6 +56,7 @@ type Storage interface {
 	ListDirectory(string) ([]string, error)
 	Exists(string) (bool, error)
 	Remove(string) error
+	RemoveAll(string) error
 }
 
 type Config struct {

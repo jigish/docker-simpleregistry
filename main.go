@@ -76,7 +76,7 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	ctx.storage.Remove(markPath)
+	ctx.storage.RemoveAll(markPath)
 
 	sendResponse(w, nil, http.StatusOK, nil, false)
 }
@@ -316,7 +316,7 @@ func (ctx *Context) DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
 	repository := mux.Vars(r)["repository"]
 	tag := mux.Vars(r)["tag"]
 
-	err := ctx.storage.Remove(storage.TagPathWithName(namespace, repository, tag))
+	err := ctx.storage.RemoveAll(storage.TagPathWithName(namespace, repository, tag))
 	if err != nil {
 		sendResponse(w, "Tag not found", 404, nil, false)
 		return
@@ -329,7 +329,7 @@ func (ctx *Context) DeleteRepoHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 
-	err := ctx.storage.Remove(storage.TagPath(namespace, repository))
+	err := ctx.storage.RemoveAll(storage.TagPath(namespace, repository))
 	if err != nil {
 		sendResponse(w, "Repository not found", 404, nil, false)
 		return

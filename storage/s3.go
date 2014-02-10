@@ -163,8 +163,23 @@ func (s *S3) Exists(path string) (bool, error) {
 func (s *S3) Remove(path string) error {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	// TODO do i have to remove all with this prefix here?
 	return s.bucket.Del(p.Join(s.RootPath, path))
+}
+
+func (s *S3) RemoveAll(path string) error {
+	// find and remove everything "under" it
+	s.authLock.RLock()
+	defer s.authLock.RUnlock()
+	result, err := s.bucket.List(p.Join(s.RootPath, path) + "/", "", "", 0)
+	if err != nil {
+		return err
+	}
+	for _, key := range result.Contents {
+		// TODO verify that this comes back properly
+		s.bucket.Del(key.Key)
+	}
+	// finally, remove it
+	return s.Remove(path)
 }
 
 // This will ensure that we don't try to upload the same thing from two different requests at the same time

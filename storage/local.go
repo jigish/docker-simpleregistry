@@ -61,5 +61,9 @@ func (s *Local) Exists(path string) (bool, error) {
 }
 
 func (s *Local) Remove(path string) error {
+	return os.Remove(p.Join(s.RootPath, path))
+}
+
+func (s *Local) RemoveAll(path string) error {
 	return os.RemoveAll(p.Join(s.RootPath, path))
 }
