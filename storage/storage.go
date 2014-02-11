@@ -57,6 +57,9 @@ type Storage interface {
 	Exists(string) (bool, error)
 	Remove(string) error
 	RemoveAll(string) error
+
+	// used for testing
+	GetRootPath() string
 }
 
 type Config struct {

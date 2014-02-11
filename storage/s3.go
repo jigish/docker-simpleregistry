@@ -34,6 +34,10 @@ type S3 struct {
 	SecretKey string `json:"secret_key"`
 }
 
+func (s *S3) GetRootPath() string {
+	return s.RootPath
+}
+
 func (s *S3) getAuth() (err error) {
 	s.auth, err = aws.GetAuth(s.AccessKey, s.SecretKey, "", time.Time{})
 	if s.s3 != nil {

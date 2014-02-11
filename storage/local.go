@@ -12,6 +12,10 @@ type Local struct {
 	RootPath string `json:"root_path"`
 }
 
+func (s *Local) GetRootPath() string {
+	return s.RootPath
+}
+
 func (s *Local) init() error {
 	return os.MkdirAll(s.RootPath, 0770)
 }
