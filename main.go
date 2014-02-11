@@ -27,6 +27,22 @@ type Context struct {
 	storage storage.Storage
 }
 
+func (ctx *Context) isUploading(imageId string) bool {
+	markExists, err := ctx.storage.Exists(storage.ImageMarkPath(imageId))
+	return markExists && err == nil
+}
+
+func (ctx *Context) RequireCompletion(handlerFunc http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		imageId := mux.Vars(r)["imageId"]
+		if ctx.isUploading(imageId) {
+			sendResponse(w, "Image is being uploaded, retry later", 400, nil, false)
+			return
+		}
+		handlerFunc(w, r)
+	}
+}
+
 func (ctx *Context) GetImageLayerHandler(w http.ResponseWriter, r *http.Request) {
 	imageId := mux.Vars(r)["imageId"]
 	imageReader, err := ctx.storage.StreamRead(storage.ImageLayerPath(imageId))
@@ -441,11 +457,11 @@ func main() {
 	r.HandleFunc("/v1/_ping", PingHandler)
 
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#images
-	r.HandleFunc("/v1/images/{imageId}/layer", ctx.GetImageLayerHandler).Methods("GET")
+	r.HandleFunc("/v1/images/{imageId}/layer", ctx.RequireCompletion(ctx.GetImageLayerHandler)).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.PutImageLayerHandler).Methods("PUT")
-	r.HandleFunc("/v1/images/{imageId}/json", ctx.GetImageJsonHandler).Methods("GET")
+	r.HandleFunc("/v1/images/{imageId}/json", ctx.RequireCompletion(ctx.GetImageJsonHandler)).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.PutImageJsonHandler).Methods("PUT")
-	r.HandleFunc("/v1/images/{imageId}/ancestry", ctx.GetImageAncestryHandler).Methods("GET")
+	r.HandleFunc("/v1/images/{imageId}/ancestry", ctx.RequireCompletion(ctx.GetImageAncestryHandler)).Methods("GET")
 
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#tags
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetTagsHandler).Methods("GET")
