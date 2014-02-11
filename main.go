@@ -430,23 +430,40 @@ func main() {
 	}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/_ping", PingHandler)
 	r.HandleFunc("/", HomeHandler)
 
+	//
+	// Registry Stuff
+	//
+
+	// http://docs.docker.io/en/latest/reference/api/registry_api/#status
+	r.HandleFunc("/_ping", PingHandler)
+	r.HandleFunc("/v1/_ping", PingHandler)
+
+	// http://docs.docker.io/en/latest/reference/api/registry_api/#images
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.GetImageLayerHandler).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.PutImageLayerHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.GetImageJsonHandler).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.PutImageJsonHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/ancestry", ctx.GetImageAncestryHandler).Methods("GET")
 
+	// http://docs.docker.io/en/latest/reference/api/registry_api/#tags
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetTagsHandler).Methods("GET")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.GetTagHandler).Methods("GET")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.PutTagHandler).Methods("PUT")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.DeleteTagHandler).Methods("DELETE")
+
+	// http://docs.docker.io/en/latest/reference/api/registry_api/#repositories
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.DeleteRepoHandler).Methods("DELETE")
 
-	// index stuff
+	//
+	// Index Stuff (just a shell, no actual auth is done)
+	//
+
+	// http://docs.docker.io/en/latest/reference/api/index_api/#users
 	r.HandleFunc("/v1/users", LoginHandler)
+
+	// http://docs.docker.io/en/latest/reference/api/index_api/#repository
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.ListImagesHandler).Methods("GET")
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.PutImageHandler).Methods("PUT")
 
