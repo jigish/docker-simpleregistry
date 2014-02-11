@@ -52,7 +52,7 @@ type Storage interface {
 	GetContent(string) ([]byte, error)
 	PutContent(string, []byte) error
 	StreamRead(string) (io.ReadCloser, error)
-	StreamWrite(string, io.Reader, int64) error
+	StreamWrite(string, io.Reader) error
 	ListDirectory(string) ([]string, error)
 	Exists(string) (bool, error)
 	Remove(string) error

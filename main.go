@@ -63,7 +63,7 @@ func (ctx *Context) PutImageLayerHandler(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	err = ctx.storage.StreamWrite(layerPath, r.Body, r.ContentLength)
+	err = ctx.storage.StreamWrite(layerPath, r.Body)
 	if err != nil {
 		sendResponse(w, "Couldn't write to layer file", 500, nil, false)
 		return

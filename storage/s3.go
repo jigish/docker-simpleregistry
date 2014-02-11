@@ -14,7 +14,6 @@ import (
 )
 
 const s3ContentType = "application/binary"
-const s3BufferDir = "/tmp/docker-registry"
 var s3Options = s3.Options{}
 
 type S3 struct {
@@ -23,10 +22,12 @@ type S3 struct {
 	region    aws.Region
 	s3        *s3.S3
 	bucket    *s3.Bucket
+	bufferDir *BufferDir
 
 	Region    string `json:"region"`
 	Bucket    string `json:"bucket"`
 	RootPath  string `json:"root_path"`
+	BufferDir string `json:"buffer_dir"`
 	AccessKey string `json:"access_key"`
 	SecretKey string `json:"secret_key"`
 }
@@ -49,6 +50,9 @@ func (s *S3) init() error {
 	if s.RootPath == "" {
 		return errors.New("Please Specify an S3 Root Path")
 	}
+	if s.BufferDir == "" {
+		return errors.New("Please Specify an S3 Buffer Directory")
+	}
 
 	var ok bool
 	if s.region, ok = aws.Regions[s.Region]; !ok {
@@ -60,10 +64,11 @@ func (s *S3) init() error {
 	}
 	s.s3 = s3.New(s.auth, s.region)
 	s.bucket = s.s3.Bucket(s.Bucket)
-	if err := os.Mkdir(s3BufferDir, 0755); err != nil && !os.IsExist(err) {
+	if err := os.Mkdir(s.BufferDir, 0755); err != nil && !os.IsExist(err) {
 		// there was an error and it wasn't that the directory already exists
 		return err
 	}
+	s.bufferDir = &BufferDir{Mutex: sync.Mutex{}, root: s.BufferDir}
 	go s.updateAuthLoop()
 	return nil
 }
@@ -112,32 +117,21 @@ func (s *S3) StreamRead(path string) (io.ReadCloser, error) {
 	return s.bucket.GetReader(p.Join(s.RootPath, path))
 }
 
-func (s *S3) StreamWrite(path string, reader io.Reader, length int64) error {
+func (s *S3) StreamWrite(path string, reader io.Reader) error {
 	key := p.Join(s.RootPath, path)
-	buffer, bufferPath, err := reserveTmpFile(key)
+	buffer, err := s.bufferDir.reserve(key)
 	if err != nil {
 		return err
 	}
-	readFrom := reader
-	if length < 0 {
-		// don't know the length, buffer to file first
-		length, err = io.Copy(buffer, reader)
-		buffer.Close() // close buffer file to flush
-		if err != nil {
-			releaseTmpFile(bufferPath)
-			return err
-		}
-		buffer, err = os.Open(bufferPath) // re-open buffer file for reading
-		if err != nil {
-			releaseTmpFile(bufferPath)
-			return err
-		}
-		defer buffer.Close() // make sure to close the buffer file
-		readFrom = buffer // instead of reading from the reader we got, now read from the buffer file
+	defer buffer.release()
+	// don't know the length, buffer to file first
+	length, err := io.Copy(buffer, reader)
+	if err != nil {
+		return err
 	}
-	defer releaseTmpFile(bufferPath) // this defer needs to happen *after* the buffer.Close() above it
-	// we know the length, write now
-	return s.bucket.PutReader(p.Join(s.RootPath, path), readFrom, length, s3ContentType, s3.Private, s3Options)
+	buffer.Seek(0, 0) // seek to the beginning of the file
+	// we know the length, write to s3 from file now
+	return s.bucket.PutReader(p.Join(s.RootPath, path), buffer, length, s3ContentType, s3.Private, s3Options)
 }
 
 func (s *S3) ListDirectory(path string) ([]string, error) {
@@ -183,26 +177,35 @@ func (s *S3) RemoveAll(path string) error {
 }
 
 // This will ensure that we don't try to upload the same thing from two different requests at the same time
-var tmpDirLock = sync.Mutex{}
-func reserveTmpFile(key string) (*os.File, string, error) {
-	tmpDirLock.Lock()
-	defer tmpDirLock.Unlock()
-	// sha key path and create temporary file
-	bufferPath := p.Join(s3BufferDir, fmt.Sprintf("%x", sha256.Sum256([]byte(key))))
-	if _, err := os.Stat(bufferPath); !os.IsNotExist(err) {
-		// buffer file already exists
-		return nil, "", errors.New("Upload already in progress for key "+key)
-	}
-	// if not exist, create buffer file
-	buffer, err := os.Create(bufferPath)
-	if err != nil {
-		return nil, "", err
-	}
-	return buffer, bufferPath, nil
+type BufferDir struct {
+	sync.Mutex
+	root string
 }
 
-func releaseTmpFile(fileName string) error {
-	tmpDirLock.Lock()
-	defer tmpDirLock.Unlock()
-	return os.Remove(fileName)
+func (b *BufferDir) reserve(key string) (*Buffer, error) {
+	b.Lock()
+	defer b.Unlock()
+	// sha key path and create temporary file
+	filePath := p.Join(b.root, fmt.Sprintf("%x", sha256.Sum256([]byte(key))))
+	if _, err := os.Stat(filePath); !os.IsNotExist(err) {
+		// buffer file already exists
+		return nil, errors.New("Upload already in progress for key "+key)
+	}
+	// if not exist, create buffer file
+	file, err := os.Create(filePath)
+	if err != nil {
+		return nil, err
+	}
+	return &Buffer{File: *file, dir: b}, nil
+}
+
+type Buffer struct {
+	os.File
+	dir *BufferDir
+}
+func (b* Buffer) release() error {
+	b.dir.Lock()
+	defer b.dir.Unlock()
+	b.Close()
+	return os.Remove(b.Name())
 }
