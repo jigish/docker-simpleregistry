@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	p "path"
+	"strings"
 	"sync"
 	"time"
 )
@@ -23,6 +24,7 @@ type S3 struct {
 	s3        *s3.S3
 	bucket    *s3.Bucket
 	bufferDir *BufferDir
+	rootPath  string // sanitized root path (no leading slash)
 
 	Region    string `json:"region"`
 	Bucket    string `json:"bucket"`
@@ -69,6 +71,7 @@ func (s *S3) init() error {
 		return err
 	}
 	s.bufferDir = &BufferDir{Mutex: sync.Mutex{}, root: s.BufferDir}
+	s.rootPath = strings.TrimPrefix(s.RootPath, "/")
 	go s.updateAuthLoop()
 	return nil
 }
@@ -102,23 +105,23 @@ func (s *S3) updateAuthLoop() {
 func (s *S3) GetContent(path string) ([]byte, error) {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	return s.bucket.Get(p.Join(s.RootPath, path))
+	return s.bucket.Get(s.key(path))
 }
 
 func (s *S3) PutContent(path string, content []byte) error {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	return s.bucket.Put(p.Join(s.RootPath, path), content, s3ContentType, s3.Private, s3Options)
+	return s.bucket.Put(s.key(path), content, s3ContentType, s3.Private, s3Options)
 }
 
 func (s *S3) StreamRead(path string) (io.ReadCloser, error) {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	return s.bucket.GetReader(p.Join(s.RootPath, path))
+	return s.bucket.GetReader(s.key(path))
 }
 
 func (s *S3) StreamWrite(path string, reader io.Reader) error {
-	key := p.Join(s.RootPath, path)
+	key := s.key(path)
 	buffer, err := s.bufferDir.reserve(key)
 	if err != nil {
 		return err
@@ -131,19 +134,24 @@ func (s *S3) StreamWrite(path string, reader io.Reader) error {
 	}
 	buffer.Seek(0, 0) // seek to the beginning of the file
 	// we know the length, write to s3 from file now
-	return s.bucket.PutReader(p.Join(s.RootPath, path), buffer, length, s3ContentType, s3.Private, s3Options)
+	return s.bucket.PutReader(s.key(path), buffer, length, s3ContentType, s3.Private, s3Options)
 }
 
 func (s *S3) ListDirectory(path string) ([]string, error) {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	result, err := s.bucket.List(p.Join(s.RootPath, path) + "/", "/", "", 0)
+	result, err := s.bucket.List(s.key(path) + "/", "/", "", 0)
 	if err != nil {
 		return nil, err
 	}
-	names := make([]string, len(result.Contents))
+	names := make([]string, len(result.Contents)+len(result.CommonPrefixes))
 	for i, key := range result.Contents {
-		names[i] = key.Key // TODO verify this comes back properly
+		// return path RootPath instead of sanitized version to be consistent
+		names[i] = s.RootPath + strings.TrimPrefix(key.Key, s.rootPath)
+	}
+	for i, prefix := range result.CommonPrefixes {
+		// return path RootPath instead of sanitized version to be consistent, also trim trailing "/"
+		names[i+len(result.Contents)] = s.RootPath + strings.TrimPrefix(strings.TrimSuffix(prefix, "/"), s.rootPath)
 	}
 	return names, nil
 }
@@ -151,29 +159,32 @@ func (s *S3) ListDirectory(path string) ([]string, error) {
 func (s *S3) Exists(path string) (bool, error) {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	return s.bucket.Exists(p.Join(s.RootPath, path))
+	return s.bucket.Exists(s.key(path))
 }
 
 func (s *S3) Remove(path string) error {
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	return s.bucket.Del(p.Join(s.RootPath, path))
+	return s.bucket.Del(s.key(path))
 }
 
 func (s *S3) RemoveAll(path string) error {
 	// find and remove everything "under" it
 	s.authLock.RLock()
 	defer s.authLock.RUnlock()
-	result, err := s.bucket.List(p.Join(s.RootPath, path) + "/", "", "", 0)
+	result, err := s.bucket.List(s.key(path) + "/", "", "", 0)
 	if err != nil {
 		return err
 	}
 	for _, key := range result.Contents {
-		// TODO verify that this comes back properly
 		s.bucket.Del(key.Key)
 	}
 	// finally, remove it
 	return s.Remove(path)
+}
+
+func (s *S3) key(path string) string {
+	return p.Join(s.rootPath, path) // s3 expects no leading slash in some operations
 }
 
 // This will ensure that we don't try to upload the same thing from two different requests at the same time

@@ -12,6 +12,10 @@ type Local struct {
 	RootPath string `json:"root_path"`
 }
 
+func (s *Local) init() error {
+	return os.MkdirAll(s.RootPath, 0770)
+}
+
 func (s *Local) GetContent(path string) ([]byte, error) {
 	return ioutil.ReadFile(p.Join(s.RootPath, path))
 }
@@ -27,7 +31,9 @@ func (s *Local) StreamRead(path string) (io.ReadCloser, error) {
 }
 
 func (s *Local) StreamWrite(path string, reader io.Reader) error {
-	file, err := os.Create(p.Join(s.RootPath, path))
+	absPath := p.Join(s.RootPath, path)
+	os.MkdirAll(filepath.Dir(absPath), 0770)
+	file, err := os.Create(absPath)
 	if err != nil {
 		return err
 	}
@@ -65,5 +71,18 @@ func (s *Local) Remove(path string) error {
 }
 
 func (s *Local) RemoveAll(path string) error {
+	if path == "" || path == "/" {
+		// remove everything inside root path, not root path itself
+		names, err := s.ListDirectory("/")
+		if err != nil {
+			return err
+		}
+		for _, name := range names {
+			if err := os.RemoveAll(name); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	return os.RemoveAll(p.Join(s.RootPath, path))
 }

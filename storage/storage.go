@@ -82,7 +82,7 @@ func New(cfgFile string) (Storage, error) {
 	switch cfg.Type {
 	case "local":
 		if cfg.Local != nil {
-			return cfg.Local, nil
+			return cfg.Local, cfg.Local.init()
 		}
 		return nil, errors.New("No config for storage type 'local' found")
 	case "s3":
