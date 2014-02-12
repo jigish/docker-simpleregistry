@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -512,5 +513,6 @@ func main() {
 	// TODO http://docs.docker.io/en/latest/reference/api/index_api/#search
 	//r.HandleFunc("/v1/search", ctx.IndexSearchHandler).Methods("GET")
 
-	http.ListenAndServe(*addr, r)
+	log.Printf("Listening on %s", *addr)
+	log.Fatalln(http.ListenAndServe(*addr, r))
 }
