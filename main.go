@@ -257,7 +257,7 @@ func (ctx *Context) generateAncestry(imageId string, parentId string) error {
 	return nil
 }
 
-func (ctx *Context) GetTagsHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) GetRepoTagsHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 
@@ -285,7 +285,7 @@ func (ctx *Context) GetTagsHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, false)
 }
 
-func (ctx *Context) GetTagHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) GetRepoTagHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 	tag := mux.Vars(r)["tag"]
@@ -299,7 +299,7 @@ func (ctx *Context) GetTagHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, false)
 }
 
-func (ctx *Context) PutTagHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) PutRepoTagHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 	tag := mux.Vars(r)["tag"]
@@ -327,7 +327,7 @@ func (ctx *Context) PutTagHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, false)
 }
 
-func (ctx *Context) DeleteTagHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) DeleteRepoTagHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 	tag := mux.Vars(r)["tag"]
@@ -354,11 +354,11 @@ func (ctx *Context) DeleteRepoHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, true, 200, nil, false)
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func IndexLoginHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, true, 200, nil, false)
 }
 
-func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) IndexListImagesHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 
@@ -371,7 +371,7 @@ func (ctx *Context) ListImagesHandler(w http.ResponseWriter, r *http.Request) {
 	sendResponse(w, data, 200, nil, true)
 }
 
-func (ctx *Context) PutImageHandler(w http.ResponseWriter, r *http.Request) {
+func (ctx *Context) IndexPutImageHandler(w http.ResponseWriter, r *http.Request) {
 	namespace := mux.Vars(r)["namespace"]
 	repository := mux.Vars(r)["repository"]
 
@@ -448,6 +448,8 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", HomeHandler)
 
+	// TODO add headers from docker-registry
+
 	//
 	// Registry Stuff
 	//
@@ -455,6 +457,9 @@ func main() {
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#status
 	r.HandleFunc("/_ping", PingHandler)
 	r.HandleFunc("/v1/_ping", PingHandler)
+	// TODO Undocumented (from docker-registry v0.6.5)
+	//r.HandleFunc("/_status", StatusHandler)
+	//r.HandleFunc("/v1/_status", StatusHandler)
 
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#images
 	r.HandleFunc("/v1/images/{imageId}/layer", ctx.RequireCompletion(ctx.GetImageLayerHandler)).Methods("GET")
@@ -462,26 +467,50 @@ func main() {
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.RequireCompletion(ctx.GetImageJsonHandler)).Methods("GET")
 	r.HandleFunc("/v1/images/{imageId}/json", ctx.PutImageJsonHandler).Methods("PUT")
 	r.HandleFunc("/v1/images/{imageId}/ancestry", ctx.RequireCompletion(ctx.GetImageAncestryHandler)).Methods("GET")
+	// TODO Undocumented (from docker-registry v0.6.5)
+	//r.HandleFunc("/v1/images/{imageId}/checksum", ctx.PutImageChecksumHandler).Methods("PUT")
+	//r.HandleFunc("/v1/images/{imageId}/files", ctx.RequireCompletion(ctx.PutImageFilesHandler)).Methods("PUT")
+	//r.HandleFunc("/v1/images/{imageId}/files", ctx.RequireCompletion(ctx.GetImageFilesHandler)).Methods("GET")
+	// Private images stuff ?
+	//r.HandleFunc("/v1/private_images/{imageId}/layer", ctx.RequireCompletion(ctx.GetPrivateImageLayerHandler)).Methods("GET")
+	//r.HandleFunc("/v1/private_images/{imageId}/json", ctx.RequireCompletion(ctx.GetPrivateImageJsonHandler)).Methods("GET")
+	//r.HandleFunc("/v1/private_images/{imageId}/files", ctx.RequireCompletion(ctx.GetPrivateImageFilesHandler)).Methods("GET")
 
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#tags
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetTagsHandler).Methods("GET")
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.GetTagHandler).Methods("GET")
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.PutTagHandler).Methods("PUT")
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.DeleteTagHandler).Methods("DELETE")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetRepoTagsHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.GetRepoTagHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.PutRepoTagHandler).Methods("PUT")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags/{tag}", ctx.DeleteRepoTagHandler).Methods("DELETE")
+	// TODO Undocumented (from docker-registry v0.6.5)
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/tags", ctx.GetRepoTagsHandler).Methods("DELETE")
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/json", ctx.GetRepoJsonHandler).Methods("GET")
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/properties", ctx.PutRepoPropertiesHandler).Methods("PUT")
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/properties", ctx.GetRepoPropertiesHandler).Methods("GET")
 
 	// http://docs.docker.io/en/latest/reference/api/registry_api/#repositories
 	r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.DeleteRepoHandler).Methods("DELETE")
 
 	//
-	// Index Stuff (just a shell, no actual auth is done)
+	// Index Stuff (most of these won't work properly. this is not intended for use as a proper index.)
 	//
 
 	// http://docs.docker.io/en/latest/reference/api/index_api/#users
-	r.HandleFunc("/v1/users", LoginHandler)
+	// NOTE: This is just a shell. No actual auth is done.
+	r.HandleFunc("/v1/users", IndexLoginHandler)
+	// TODO (the rest of this shit)
+	//r.HandleFunc("/v1/users/{username}/", IndexPostUserHandler).Methods("POST")
 
 	// http://docs.docker.io/en/latest/reference/api/index_api/#repository
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.ListImagesHandler).Methods("GET")
-	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.PutImageHandler).Methods("PUT")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.IndexListImagesHandler).Methods("GET")
+	r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.IndexPutImageHandler).Methods("PUT")
+	// TODO (the rest of this shit)
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.IndexPutRepoHandler).Methods("PUT")
+	//WTF THIS EXISTS IN THE REGISTRY AS WELL r.HandleFunc("/v1/repositories/{namespace}/{repository}/", ctx.IndexDeleteRepositoryHandler).Methods("DELETE")
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/images", ctx.IndexDeleteImageHandler).Methods("DELETE")
+	//r.HandleFunc("/v1/repositories/{namespace}/{repository}/auth", ctx.IndexPutAuthHandler).Methods("PUT")
+
+	// TODO http://docs.docker.io/en/latest/reference/api/index_api/#search
+	//r.HandleFunc("/v1/search", ctx.IndexSearchHandler).Methods("GET")
 
 	http.ListenAndServe(*addr, r)
 }
